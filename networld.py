@@ -547,6 +547,11 @@ class NetWorld:
 
     # allocateFare is called by the Dispatcher, and assigns a given fare to a given Taxi.
     def allocateFare(self, origin, taxi):
+        # TODO: create a counter to find out what the average amount of taxi are per day. This can be useful
+        #
+        """
+        if abs(origin) - abs(self._fareQ[origin].destination) < []:
+        """
         # fare may have abandoned the attempt, while the taxi may have gone off-duty
         if origin not in self._fareQ or taxi not in self._taxis or not taxi.onDuty:
             return False

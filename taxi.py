@@ -1,6 +1,9 @@
 import math
+from typing import Optional
 import numpy
 import heapq
+from dataclasses import dataclass
+
 
 # a data container object for the taxi's internal list of fares. This
 # tells the taxi what fares are available to what destinations at
@@ -8,7 +11,21 @@ import heapq
 # origin is notably missing: that's because the Taxi will keep this
 # in a dictionary indexed by fare origin, so we don't need to duplicate that
 # here.
-total = int(0)
+
+# Taxi fare and total taxi on service counter.
+@dataclass
+class TaxiGroupInformation:
+    taxiCounter: int
+    total: int
+    taxisJobs: []
+    avg: int
+    daysReturns: []
+    openFares: []
+    time: int
+    fareCount: int
+
+
+group = TaxiGroupInformation(0, 0, None, 0, None, None, 0, 0)
 
 
 class FareInfo:
@@ -168,6 +185,9 @@ class Taxi:
                 self._account = self._dailyLoss
             self.onDuty = True
             onDutyPose = self._world.addTaxi(self, self._onDutyPos)
+            group.taxiCounter += 1
+
+            print("New taxi has just come on duty.\nThe total amount of taxis on duty now is: ", group.taxiCounter)
             self._nextLoc = onDutyPose[0]
             self._nextDirection = onDutyPose[1]
 
@@ -181,6 +201,8 @@ class Taxi:
         if self._account <= 0 and self._passenger is None:
             print("Taxi {0} is going off-duty".format(self.number))
             self.onDuty = False
+            group.taxiCounter -= 1
+            print("Taxi has gone off duty.\nThe current amount of taxi's on duty is:", group.taxiCounter)
             self._offDutyTime = self._world.simTime
         # have we reached our last known destination? Decide what to do now.
         if len(self._path) == 0:
@@ -327,9 +349,7 @@ class Taxi:
         # we just dropped off a fare and received payment, add it to the account
         elif msg == self.FARE_PAY:
             self._account += args['amount']
-            for fare in self._availableFares.items():
-                self.total += fare[0].price  # TODO: add to current total.
-            print("Current revenue: £", round(self.total, 2))
+            print("The current revenue: £", round(self._account, 2))
             return
         # a fare cancelled before being collected, remove it from the list
         elif msg == self.FARE_CANCEL:
@@ -348,88 +368,48 @@ class Taxi:
     # journey. Below is a naive depth-first search implementation. You should be able
     # to do much better than this!
     def _planPath(self, origin, destination, **args):
+        openNodes = {origin: [0, 0, 0, None]}  # Creates new open dic and adds origin value into dic
+        closedNodes = {}
+        #  While there is no undiscovered nodes.
+        while len(openNodes) > 0:
+            currentNodeF = None  # Sets the current nodes F value to a default of None.
+            for node in openNodes:
+                # If value has a lower f value set this value as current node.
+                if currentNodeF is None or openNodes[node][0] < currentNodeF:
+                    currentNode = node
+                    # Update current F.
+                    currentNodeF = openNodes[node][2]
+                    # Stores the coordinates of the current node.
+            currentCoordinates = openNodes[currentNode]
+            # Removes from open end node list.
+            del openNodes[currentNode]
+            closedNodes.update({currentNode: currentCoordinates[3]})
+            if currentNode == destination:
+                path = []
+                parent = currentCoordinates[3]
 
-        def fScore(node):
-            return abs(node[0] - node[1])
+                while parent is not None:
+                    path.append(currentNode)
+                    currentNode = parent
+                    parent = closedNodes[currentNode]
+                path.append(origin)
+                path.reverse()
+                return path
+            else:
 
-        def heuristicVal(a, b) -> float:
-            (x1, x2) = a
-            (y1, y2) = b
-            return abs(x1 - x2) + abs(y1 - y2)
-
-        heuristicList = {None, None}
-
-        # the list of explored paths. Recursive invocations pass in explored as a parameter
-        if 'explored' not in args:
-            args['explored'] = {}
-        # add this origin to the explored list
-        # explored is a dict purely so we can hash its index for fast lookup, so its value doesn't matter
-        args['explored'][origin] = None
-        # the actual path we are going to generate
-        # take the next node in the frontier, and expand it depth-wise
-        if origin in self._map:
-            # the frontier of unexplored paths (from this Node
-            frontier = [node for node in self._map[origin].keys() if node not in args['explored']]
-            openList = [origin]
-            lowestNode = [None]
-            closedList = []
-            while openList is not None:
-                current_node = openList[0]
-                currentIndex = 0
-                for index, item in enumerate(openList):
-                    if lowestNode == [None] or fScore(item) < fScore(lowestNode):
-                        current_node = item
-                        currentIndex = index
-                openList.pop(currentIndex)
-                closedList.append(current_node)
-
-                if current_node == destination:
-                    path = []
-                    current = current_node
-                    while current is not None:
-                        path.append(current)
-                        # TODO: Create parent and child.
-                        # return path[::-1]
-                childNodes = []
-
-                break
-            # costFromStartNode += abs([current[0] - origin[0]] + [current[1] - origin[1]])
-            # recurse down to the next node. This will automatically create a depth-first
-            # approach because the recursion won't bottom out until no more frontier nodes
-            # can be generated
-
-            for nextNode in frontier:
-                print("Origin:", origin)
-                print("Path: ", nextNode)
-                print("Destination: ", destination)
-                path = path + self._planPath(nextNode, destination, explored=args['explored'])
-
-                # stop early as soon as the destination has been found by any current.
-                if destination in path:
-                    # validate path
-                    if len(path) > 1:
-                        try:
-                            pnode = 0  # TODO: give PNode a value
-                            # use a generator expression to find any invalid nodes in the path
-                            badNode = next(pnode for pnode in path[1:] if
-                                           pnode not in self._map[path[path.index(pnode) - 1]].keys())
-                            raise IndexError("Invalid path: no current from ({0},{1}) to ({2},{3} in map".format(
-                                self._map[path.index(pnode) - 1][0], self._map[path.index(pnode) - 1][1], pnode[0],
-                                pnode[1]))
-                        except StopIteration:
-                            pass
-                    return path
-        # didn't reach the destination from any reachable node
-        # no need, therefore, to expand the path for the higher-level call, this is a dead end.
+                for child in (node for node in self._map[currentNode].keys() if node not in closedNodes):
+                    childG = currentCoordinates[2] + self._world.distance2Node(
+                        self._world.getNode(currentNode[0], currentNode[1]),
+                        self._world.getNode(child[0], child[1]))
+                    math.hypot(abs(destination[0] - child[0]), (destination[1] - child[1]))
+                    childH = abs(destination[0] - child[0]) ** 2 + abs(destination[1] - child[1]) ** 2
+                    childF = childG + childH
+                    if child in openNodes:
+                        if childG > openNodes[child][0]:
+                            continue
+                    openNodes.update({child: [childG, childH, childF, currentNode]})
         return []
 
-        # TODO
-
-    # this function decides whether to offer a bid for a fare. In general you can consider your current position, time,
-    # financial state, the collection and dropoff points, the time the fare called - or indeed any other variable that
-    # may seem relevant to decide whether to bid. The (crude) constraint-satisfaction method below is only intended as
-    # a hint that maybe some form of CSP solver with automated reasoning might be a good way of implementing this. But
-    # other metho dologies could work well. For best results you will almost certainly need to use probabilistic reasoning.
     def _bidOnFare(self, time, origin, destination, price):
         NoCurrentPassengers = self._passenger is None
         NoAllocatedFares = len([fare for fare in self._availableFares.values() if fare.allocated]) == 0
@@ -451,3 +431,11 @@ class Taxi:
         Worthwhile = PriceBetterThanCost and NotCurrentlyBooked
         Bid = CloseEnough and Worthwhile
         return Bid
+
+# TODO
+
+# this function decides whether to offer a bid for a fare. In general you can consider your current position, time,
+# financial state, the collection and dropoff points, the time the fare called - or indeed any other variable that
+# may seem relevant to decide whether to bid. The (crude) constraint-satisfaction method below is only intended as
+# a hint that maybe some form of CSP solver with automated reasoning might be a good way of implementing this. But
+# other metho dologies could work well. For best results you will almost certainly need to use probabilistic reasoning.
