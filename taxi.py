@@ -411,12 +411,16 @@ class Taxi:
         return []
 
     def _bidOnFare(self, time, origin, destination, price):
+
         NoCurrentPassengers = self._passenger is None
         NoAllocatedFares = len([fare for fare in self._availableFares.values() if fare.allocated]) == 0
         TimeToOrigin = self._world.travelTime(self._loc, self._world.getNode(origin[0], origin[1]))
         TimeToDestination = self._world.travelTime(self._world.getNode(origin[0], origin[1]),
                                                    self._world.getNode(destination[1], destination[1]))
+        timeToLocation = TimeToOrigin + TimeToDestination
 
+        trafficCost = 0
+        print(self.currentLocation)
         FiniteTimeToOrigin = TimeToOrigin > 0
         FiniteTimeToDestination = TimeToDestination > 0
         CanAffordToDrive = self._account > TimeToOrigin
@@ -424,6 +428,7 @@ class Taxi:
         PriceBetterThanCost = FairPriceToDestination and FiniteTimeToDestination
         FareExpiryInFuture = self._maxFareWait > self._world.simTime - time
         EnoughTimeToReachFare = self._maxFareWait - self._world.simTime + time > TimeToOrigin
+
         SufficientDrivingTime = FiniteTimeToOrigin and EnoughTimeToReachFare
         WillArriveOnTime = FareExpiryInFuture and SufficientDrivingTime
         NotCurrentlyBooked = NoCurrentPassengers and NoAllocatedFares
