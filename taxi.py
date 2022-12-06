@@ -23,9 +23,10 @@ class TaxiGroupInformation:
     openFares: []
     time: int
     fareCount: int
+    trafficProbabilityMap: []
 
 
-group = TaxiGroupInformation(0, 0, None, 0, None, None, 0, 0)
+group = TaxiGroupInformation(0, 0, None, 0, None, None, 0, 0, None)
 
 
 class FareInfo:
@@ -410,12 +411,49 @@ class Taxi:
                     openNodes.update({child: [childG, childH, childF, currentNode]})
         return []
 
+    def _trafficProbability(self, x, y, usage_counter):
+        if group.trafficProbabilityMap is None:
+            group.trafficProbabilityMap = []
+            for x in range(self._world.xSize):
+                for y in range(self._world.ySize):
+                    # Produce a probability model for traffic planning
+                    group.trafficProbabilityMap.append({"x": x, "y": y, "probability": 0, "trafficCount": 0})
+                    # Gets location in list of dictionary.
+            for loc in group.trafficProbabilityMap:
+                # If value exists.
+                if loc["x": x, "y": y]:
+                    # Increments counter by the amount of times that a taxi has driven to location.
+                    loc["trafficCount"] += usage_counter
+                    # append to total cross road travelled on counter.
+                    totalOfAllNodesTravelledOn = 0
+                    for trafficCount in group.trafficProbabilityMap:
+                        totalOfAllNodesTravelledOn += trafficCount["trafficCount"]
+                    # Find out the probability that this road will be used.
+                    loc["probability"] = loc["trafficCount"] / totalOfAllNodesTravelledOn
+                    # TODO: Change it to cross sections and not every node.
+                    return
+
+    def _getCrossRoadProbabilty(self, x, y):
+        # If empty return 0
+        if len(group.trafficProbabilityMap) == 0:
+            return 0
+        # If found return location probability
+        for loc in group.trafficProbabilityMap:
+            if loc["x", x, "y", y]:
+                return loc["probability"]
+
+
+
     def _bidOnFare(self, time, origin, destination, price):
+
         NoCurrentPassengers = self._passenger is None
         NoAllocatedFares = len([fare for fare in self._availableFares.values() if fare.allocated]) == 0
         TimeToOrigin = self._world.travelTime(self._loc, self._world.getNode(origin[0], origin[1]))
         TimeToDestination = self._world.travelTime(self._world.getNode(origin[0], origin[1]),
                                                    self._world.getNode(destination[1], destination[1]))
+        timeToLocation = TimeToOrigin + TimeToDestination
+
+        trafficCost = 0
 
         FiniteTimeToOrigin = TimeToOrigin > 0
         FiniteTimeToDestination = TimeToDestination > 0
@@ -424,6 +462,7 @@ class Taxi:
         PriceBetterThanCost = FairPriceToDestination and FiniteTimeToDestination
         FareExpiryInFuture = self._maxFareWait > self._world.simTime - time
         EnoughTimeToReachFare = self._maxFareWait - self._world.simTime + time > TimeToOrigin
+
         SufficientDrivingTime = FiniteTimeToOrigin and EnoughTimeToReachFare
         WillArriveOnTime = FareExpiryInFuture and SufficientDrivingTime
         NotCurrentlyBooked = NoCurrentPassengers and NoAllocatedFares

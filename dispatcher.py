@@ -209,18 +209,19 @@ class Dispatcher:
 
     # TODO - improve costing
     def _costFare(self, fare):
+        # Standard base charge.
         baseCharge = 25
+        # Works out the time between taxi
         timeToDestination = self._parent.travelTime(self._parent.getNode(fare.origin[0], fare.origin[1]),
                                                     self._parent.getNode(fare.destination[0], fare.destination[1]))
         # The more taxi are on duty the less the fare becomes.
         taxiOnDutyIncrease = 2 - (4 / group.taxiCounter)
         if timeToDestination > 5:
-            return (timeToDestination * taxiOnDutyIncrease) + baseCharge
-        return baseCharge/5*timeToDestination
+            return (timeToDestination * taxiOnDutyIncrease) * 1.5 + baseCharge
+        return baseCharge / 5 * timeToDestination
 
         # if the world is gridlocked, a flat fare applies.
 
-    # TODO
     # this method decides which taxi to allocate to a given fare. The algorithm here is not a fair allocation
     # scheme: taxis can (and do!) get starved for fares, simply because they happen to be far away from the
     # action. You should be able to do better than that using some form of CSP solver (this is just a suggestion,
@@ -232,13 +233,13 @@ class Dispatcher:
             group.daysReturns = []
         if group.taxisJobs is None:
             group.taxisJobs = []
+        if group.openFares is None:
+            group.openFares = []
 
-        # a very simple approach here gives taxis at most 5 ticks to respond, which can
-        # surely be improved upon.
-        #  Median time
+            # a very simple approach here gives taxis at most 5 ticks to respond, which can
+            # surely be improved upon.
 
         if self._parent.simTime - time > 5:
-
             # todo: Increase time to optimal time.
 
             allocatedTaxi = -1
@@ -249,120 +250,138 @@ class Dispatcher:
             # 2) that the bidding taxi is in the dispatcher's list of taxis
             # 3) that the taxi's location is 'on-grid': somewhere in the dispatcher's map
             # 4) that at least one valid taxi has actually bid on the fare
-
             if fareNode is not None:
-                for taxiIdx in self._fareBoard[origin][destination][time].bidders:
-                    if len(self._taxis) > taxiIdx:
-                        bidderLoc = self._taxis[taxiIdx].currentLocation
-                        bidderNode = self._parent.getNode(bidderLoc[0], bidderLoc[1])
+                if len(group.openFares) == 5:
+                    # In this code the taxi allocator does many things, namely:
+                    # 1) runs the default program whilst it has less than 5 days worth of hourly averages.
+                    # 2) Produces a taxi average fare using 3 hours worth of statistics.
+                    # 3) Works out the distance that a taxi has travelled over the three days.
+                    # 4) Stores at least 5 hours worth of taxi fares that a taxi can select.
+                    # 5) Assigns the lowest taxi travel distance the closest to average fare.
+                    # 5.1) If there is a draw then it selects a node at random
+                    lowestNodeTotal = lowestNode = None
+                    drawingNodes = []
 
-                        if bidderNode is not None:
-                            # ultimately the naive algorithm chosen is which taxi is the closest. This is patently unfair for several
-                            # reasons, but does produce *a* winner.
-                            if winnerNode is None or self._parent.distance2Node(bidderNode,
-                                                                                fareNode) < self._parent.distance2Node(
-                                winnerNode, fareNode):
+                    # Loops through to see which taxi has the lowest fare total assigned to the taxi.
+                    """if len(group.taxisJobs) == 0:
+                        pass
+                    else:
+                        print(group.taxisJobs)
+                        for t in group.taxisJobs:
 
-                                allocatedTaxi = taxiIdx
-                                winnerNode = bidderNode
-                            else:
-                                # and after all that, we still have to check that somebody won, because any of the other reasons to invalidate
-                                # the auction may have occurred.
-                                if allocatedTaxi >= 0:
-                                    # but if so, allocate the taxi.
+                            # If lower assign to lowest taxi fare cost.
+                            if lowestNodeTotal is None or t["taxi fare"] < lowestNodeTotal:
+                                lowestNode = t["taxi id"]
+                                lowestNodeTotal = t["taxi fare"]
+                                drawingNodes = []
 
-                                    self._fareBoard[origin][destination][time].taxi = allocatedTaxi
-                                    self._parent.allocateFare(origin, self._taxis[allocatedTaxi])
 
-                                taxiToNode = math.sqrt(
-                                    (abs(bidderLoc[0] - origin[0]) + abs(
-                                        bidderLoc[1] - origin[1])) ** 2)  # Cost of taxi to node start location
-                                nodeToDestination = math.sqrt(
-                                    (abs(origin[0] - destination[0]) + abs(origin[1] - destination[
-                                        1])))  # Cost of start node location to node destination
-                                if group.openFares is None:
-                                    group.openFares = []
-                                # Needs a minimum of 5 available fares to be in.
-                                while len(group.openFares) <= 5:
-                                    group.openFares.append(
-                                        {"origin": origin, "destination": destination, "cost": nodeToDestination})
-                                    return
+                                # Else if there is a draw insert both values in.
+                                # TODO: make sure there no duplicates.
+                            elif lowestNodeTotal == t["taxi fare"]:
+                                drawingNodes.append(lowestNode)
+                                drawingNodes.append(t["taxi id"])
 
-                                cost = taxiToNode + nodeToDestination
+                    # Winner node by random choice if there is a draw between taxis.
+                    if len(drawingNodes) > 0:
+                        lowestNode = random.choice(drawingNodes)
+                    closestAVGNode = None
+                    closestOrigin = None
+                    closestDestination = None
 
-                                # saves current taxi fare totals.
-                                # if value doesn't exist append a new taxi.
+                    taxiLocation = self._taxis[lowestNode].currentLocation
 
-                                if len(group.taxisJobs) == 0:
-                                    group.taxisJobs.append({"taxi id": allocatedTaxi, "taxi fare": cost})
-                                else:
-                                    # Assigns taxis a fare cost (Distance travelled) to work out average cost.
-                                    flag = False
-                                    for t in group.taxisJobs:
-                                        if t["taxi id"] == allocatedTaxi:
-                                            t["taxi fare"] += cost
-                                            flag = True
-                                    if not flag:
-                                        group.taxisJobs.append(
-                                            {"taxi id": allocatedTaxi, "taxi fare": taxiToNode + nodeToDestination})
-                                print(group.taxisJobs)
-                                if len(group.daysReturns) <= 3:  # While list has got less|equal than 3 hour averages
+                    # Loops through all the available fares, finding the most average fare.
+                    for fare in group.openFares:
+                        # Calculates the Euclidean distances of taxi location to origin and origin to fare destination.
+                        taxiToNodeCost = math.sqrt(abs(taxiLocation[0] - fare["origin"][0]) + abs(
+                            taxiLocation[1] - fare["origin"][1]) ** 2)
 
-                                    if group.time < self._parent.simTime:  # If new hour.
-                                        group.time = self._parent.simTime  # Update time.
-                                        # Returns average
-                                        if len(group.daysReturns) != 0:  # Checking to see if a value exists.
-                                            group.daysReturns[-1] = group.daysReturns[-1] / group.fareCount
-                                        #  Append first fare.
+                        # Gets the closest to average fare in list by using abs.
+                        if closestAVGNode is None or closestAVGNode > abs(
+                                group.avg - (taxiToNodeCost + fare["cost"])):
+                            closestAVGNode = group.avg - (taxiToNodeCost + fare["cost"])
+                            closestOrigin = fare["origin"]
+                            closestDestination = fare["destination"]
 
-                                        group.daysReturns.append(
-                                            taxiToNode + nodeToDestination)  # Appends new cost to list.
-                                        group.fareCount = 1  # Increase fare taken counter.
-                                    else:
-                                        # If not new day increment the current day by new fare cost.
-                                        group.daysReturns[-1] += taxiToNode + nodeToDestination
-                                        group.fareCount += 1
-                                # Works out an average fare cost so the taxi services can be assigned to this fare.
-                                if group.avg == 0:
-                                    # Produces a new average fare.
-                                    group.avg = sum(group.daysReturns) / len(group.daysReturns)
-                                else:
-                                    lowestNodeTotal = lowestNode = None
-                                    drawingNodes = []
+                    # Pops picked fare
+                    group.openFares = [x for x in group.openFares
+                                       if not (closestDestination == x.get("destination"))
+                                       and not (closestOrigin == x.get("origin"))]
+                    # self._fareBoard[closestOrigin][closestDestination][time].taxi
+                    pass"""
 
-                                    # Loops through to see which taxi has the lowest fares assigned to the taxi.
-                                    for t in group.taxisJobs:
-                                        if lowestNodeTotal is None or t["taxi fare"] < lowestNodeTotal:
-                                            lowestNode = t["taxi id"]
-                                            lowestNodeTotal = t["taxi fare"]
-                                            drawingNodes = []
+            for taxiIdx in self._fareBoard[origin][destination][time].bidders:
+                if len(self._taxis) > taxiIdx:
 
-                                        elif lowestNodeTotal == t["taxi fare"]:
-                                            drawingNodes.append(lowestNode)
-                                            drawingNodes.append(t["taxi id"])
+                    bidderLoc = self._taxis[taxiIdx].currentLocation
+                    bidderNode = self._parent.getNode(bidderLoc[0], bidderLoc[1])
 
-                                    # Winner node by random choice if there is a draw between taxis.
-                                    if len(drawingNodes) > 0:
-                                        lowestNode = random.choice(drawingNodes)
-                                    closestAVGNode = None
-                                    closestOrigin = None
-                                    closestDestination = None
-                                    taxiLocation = self._taxis[lowestNode].currentLocation
+                    if bidderNode is not None:
+                        # ultimately the naive algorithm chosen is which taxi is the closest. This is patently unfair for several
+                        # reasons, but does produce *a* winner.
+                        if winnerNode is None or self._parent.distance2Node(bidderNode,
+                                                                            fareNode) < self._parent.distance2Node(
+                            winnerNode, fareNode):
 
-                                    for fare in group.openFares:
-                                        taxiToNodeCost = math.sqrt(abs(taxiLocation[0] - fare["origin"][0]) + abs(
-                                            taxiLocation[1] - fare["origin"][1]) ** 2)
-                                        # Gets the closest to average fare in list.
-                                        if closestAVGNode is None or closestAVGNode > abs(
-                                                group.avg - (taxiToNodeCost + fare["cost"])):
-                                            closestAVGNode = group.avg - (taxiToNodeCost + fare["cost"])
-                                            closestOrigin = fare["origin"]
-                                            closestDestination = fare["destination"]
+                            allocatedTaxi = taxiIdx
+                            winnerNode = bidderNode
+                        else:
+                            # and after all that, we still have to check that somebody won, because any of the other reasons to invalidate
+                            # the auction may have occurred.
+                            if allocatedTaxi >= 0:
+                                # but if so, allocate the taxi.
 
-                                    # Pops picked fare
-                                    group.openFares = [x for x in group.openFares
-                                                       if not (closestDestination == x.get("destination"))
-                                                       and not (closestOrigin == x.get("origin"))]
+                                self._fareBoard[origin][destination][time].taxi = allocatedTaxi
+                                self._parent.allocateFare(origin, self._taxis[allocatedTaxi])
+                            # TODO: implement this function.
+                            # Distance cost of taxi to node start location
+                        # if len(group.daysReturns) >= 3:
+
+                        taxiToNode = math.sqrt((abs(bidderLoc[0] - origin[0]) + abs(bidderLoc[1] - origin[1])) ** 2)
+                        nodeToDestination = math.sqrt((abs(origin[0] - destination[0]) + abs(
+                            origin[1] - destination[
+                                1])))  # Distance cost of start node location to node destination
+
+                        if group.openFares is None:
+                            group.openFares = []
+                        cost = taxiToNode + nodeToDestination
+                        # Needs a minimum of 5 available fares to allow a selection of fares to take..
+                        while len(group.openFares) <= 5:
+                            group.openFares.append(
+                                {"origin": origin, "destination": destination, "cost": cost})
+                            return
+
+                        if len(group.taxisJobs) == 0:
+                            group.taxisJobs.append({"taxi id": allocatedTaxi, "taxi fare": cost})
+                        else:
+                            # Assigns taxis a fare cost (Distance travelled) to work out average cost.
+                            flag = False
+                            for t in group.taxisJobs:
+                                if t["taxi id"] == allocatedTaxi:
+                                    t["taxi fare"] += cost
+                                    flag = True
+                            if not flag:
+                                group.taxisJobs.append(
+                                    {"taxi id": allocatedTaxi, "taxi fare": taxiToNode + nodeToDestination})
+                        if group.time < self._parent.simTime:  # If new hour.
+                            group.time = self._parent.simTime  # Update time.
+                            # Returns average
+                            if len(group.daysReturns) != 0:  # Checking to see if a value exists.
+                                group.daysReturns[-1] = group.daysReturns[-1] / group.fareCount
+                            #  Append first fare.
+
+                            group.daysReturns.append(
+                                taxiToNode + nodeToDestination)  # Appends new cost to list.
+                            group.fareCount = 1  # Increase fare taken counter.
+                        else:
+                            # If not new day increment the current day by new fare cost.
+                            group.daysReturns[-1] += taxiToNode + nodeToDestination
+                            group.fareCount += 1
+                    # Works out an average fare cost so the taxi services can be assigned to this fare.
+                    if group.avg == 0:
+                        # Produces a new average fare.
+                        group.avg = sum(group.daysReturns) / len(group.daysReturns)
 
 
 """
