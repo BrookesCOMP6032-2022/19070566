@@ -1,7 +1,4 @@
 import math
-from typing import Optional
-import numpy
-import heapq
 from dataclasses import dataclass
 
 
@@ -411,38 +408,64 @@ class Taxi:
                     openNodes.update({child: [childG, childH, childF, currentNode]})
         return []
 
-    def _trafficProbability(self, x, y, usage_counter):
+    def _probabilisticPathPlanner(self, currentNode, previousNode):
+        # Work out some costing value for a percentage
+        for cross_section in group.trafficProbabilityMap:
+            pass
+        pass
+
+    def _appendToTrafficProbability(self, x, y):
+        # If probabilisticMap is None create new list.
         if group.trafficProbabilityMap is None:
             group.trafficProbabilityMap = []
-            for x in range(self._world.xSize):
-                for y in range(self._world.ySize):
-                    # Produce a probability model for traffic planning
-                    group.trafficProbabilityMap.append({"x": x, "y": y, "probability": 0, "trafficCount": 0})
-                    # Gets location in list of dictionary.
-            for loc in group.trafficProbabilityMap:
-                # If value exists.
-                if loc["x": x, "y": y]:
-                    # Increments counter by the amount of times that a taxi has driven to location.
-                    loc["trafficCount"] += usage_counter
-                    # append to total cross road travelled on counter.
-                    totalOfAllNodesTravelledOn = 0
-                    for trafficCount in group.trafficProbabilityMap:
-                        totalOfAllNodesTravelledOn += trafficCount["trafficCount"]
-                    # Find out the probability that this road will be used.
-                    loc["probability"] = loc["trafficCount"] / totalOfAllNodesTravelledOn
-                    # TODO: Change it to cross sections and not every node.
-                    return
+        # Loops through all nodes to see if dictionary is in list.
+        for loc in group.trafficProbabilityMap:
+            if loc["x": x, "y": y]:
+                # If in list increment traffic Counter
+                loc["trafficCount"] += 1
+                # Work out the probability using the Mean instance of traffic count
+                loc["probability"] = loc["trafficCount"] / sum(
+                    [locI["trafficCount"] for locI in group.trafficProbabilityMap])
+                return
+        # If value is not found in probabilisticMap append new value.
+        group.trafficProbabilityMap.append({"x": x, "y": y, "probability": 0, "trafficCount": 0})
 
-    def _getCrossRoadProbabilty(self, x, y):
+    def _getCrossRoadProbabilty(self, origin):
         # If empty return 0
+        if group.trafficProbabilityMap is None:
+            group.trafficProbabilityMap = []
+            return group.trafficProbabilityMap
         if len(group.trafficProbabilityMap) == 0:
             return 0
         # If found return location probability
-        for loc in group.trafficProbabilityMap:
-            if loc["x", x, "y", y]:
-                return loc["probability"]
+        x_y_KeysOfOriginNeighbours = [
+            [origin[0] - 1, origin[1]],
+            [origin[0], origin[1] - 1],
+            [origin[0] - 1, origin[1] - 1],
+            [origin[0] + 1, origin[1]],
+            [origin[0], origin[1] + 1],
+            [origin[0] + 1, origin[1] + 1]
+        ]
+        localProbabilities = []
+        # For all instance of neighbours paths.
+        for keySet in x_y_KeysOfOriginNeighbours:
+            # This will return the values in the probability table.
+            # Problems that will occur with this solution:
+            # 1. The probability might have not been assigned thus it cannot bare in mind that this route might be the cheapest
+            localProbabilities.append(
+                filter(lambda inst: all(key in inst for key in keySet), group.trafficProbabilityMap))
+        # Converts the filter back to a list.
+        localProbabilities = list(localProbabilities)
+        # Sorts the probability in asc order
+        localProbabilities = sorted(localProbabilities, key=lambda probability: probability["probability"])
+        lowestNode = None
+        for probFilter in localProbabilities:
+            for prob in probFilter:
+                pass
+            # If vacant the can drive through. Use this road.
+            # I need to produce some total heuristic costing system.
 
-
+        # Produce some costing function.
 
     def _bidOnFare(self, time, origin, destination, price):
 
@@ -451,9 +474,17 @@ class Taxi:
         TimeToOrigin = self._world.travelTime(self._loc, self._world.getNode(origin[0], origin[1]))
         TimeToDestination = self._world.travelTime(self._world.getNode(origin[0], origin[1]),
                                                    self._world.getNode(destination[1], destination[1]))
-        timeToLocation = TimeToOrigin + TimeToDestination
 
-        trafficCost = 0
+        # noTraffic = TimeToOrigin + TimeToDestination
+
+        # Check for other heuristic costs. and compare them again cost of probability * traffic probability.
+        # probability = self._getCrossRoadProbabilty(origin)
+
+        # heuristic + 1 * mean of all probability that occur in cross sections
+
+        # timeTakenWithTraffic - timeWithoutTraffic * probability for all cross
+
+        # withTraffic = noTraffic * 1 + probability
 
         FiniteTimeToOrigin = TimeToOrigin > 0
         FiniteTimeToDestination = TimeToDestination > 0
