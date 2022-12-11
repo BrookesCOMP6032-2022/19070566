@@ -381,6 +381,7 @@ class Taxi:
             currentCoordinates = openNodes[currentNode]
             # Removes from open end node list.
             del openNodes[currentNode]
+            # Updates the list with the current lowest for ths node.
             closedNodes.update({currentNode: currentCoordinates[3]})
             if currentNode == destination:
                 path = []
@@ -394,17 +395,21 @@ class Taxi:
                 path.reverse()
                 return path
             else:
-
+                # Updates all children nodes in the path.
                 for child in (node for node in self._map[currentNode].keys() if node not in closedNodes):
+                    # Calculates the cheapest path score.
                     childG = currentCoordinates[2] + self._world.distance2Node(
                         self._world.getNode(currentNode[0], currentNode[1]),
                         self._world.getNode(child[0], child[1]))
-                    math.hypot(abs(destination[0] - child[0]), (destination[1] - child[1]))
+
+                    # Calculates the estimated heuristic score using Euclidean distance
                     childH = abs(destination[0] - child[0]) ** 2 + abs(destination[1] - child[1]) ** 2
+                    # Current cheapest path.
                     childF = childG + childH
                     if child in openNodes:
                         if childG > openNodes[child][0]:
                             continue
+                            # Updates  child node.
                     openNodes.update({child: [childG, childH, childF, currentNode]})
         return []
 
@@ -437,7 +442,16 @@ class Taxi:
             return group.trafficProbabilityMap
         if len(group.trafficProbabilityMap) == 0:
             return 0
+
+        # Makes sure that the system doesn't exclude a road straight away to produce a more distributed group of probabilities if possible.
+        minRoadDistributions = 20
+        x = sum([prob["trafficCounter"] for prob in group.trafficProbabilityMap])
+        if x < minRoadDistributions:
+            return
+
         # If found return location probability
+        # Gets all the possible neighbours of x.
+        # Need to produce some validation.
         x_y_KeysOfOriginNeighbours = [
             [origin[0] - 1, origin[1]],
             [origin[0], origin[1] - 1],
@@ -446,6 +460,7 @@ class Taxi:
             [origin[0], origin[1] + 1],
             [origin[0] + 1, origin[1] + 1]
         ]
+
         localProbabilities = []
         # For all instance of neighbours paths.
         for keySet in x_y_KeysOfOriginNeighbours:
@@ -459,12 +474,13 @@ class Taxi:
         # Sorts the probability in asc order
         localProbabilities = sorted(localProbabilities, key=lambda probability: probability["probability"])
         lowestNode = None
+        H = 0
+
         for probFilter in localProbabilities:
             for prob in probFilter:
                 pass
-            # If vacant the can drive through. Use this road.
+            # If vacant, the taxi can drive through.
             # I need to produce some total heuristic costing system.
-
         # Produce some costing function.
 
     def _bidOnFare(self, time, origin, destination, price):
