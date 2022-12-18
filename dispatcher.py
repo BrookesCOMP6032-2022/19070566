@@ -214,11 +214,16 @@ class Dispatcher:
         # Works out the time between taxi
         timeToDestination = self._parent.travelTime(self._parent.getNode(fare.origin[0], fare.origin[1]),
                                                     self._parent.getNode(fare.destination[0], fare.destination[1]))
+        # If the place is a popular location add multiplier
+        popularLocationMultiplier = 1
+        if (fare.origin[0] == 24 and fare.origin[1] == 24) or (fare.destination[0] == 24 and fare.destination[1] == 24):
+            popularLocationMultiplier += .6
+
         # The more taxi are on duty the less the fare becomes.
         taxiOnDutyIncrease = 2 - (4 / group.taxiCounter)
         if timeToDestination > 5:
-            return (timeToDestination * taxiOnDutyIncrease) * 1.5 + baseCharge
-        return baseCharge / 5 * timeToDestination
+            return (timeToDestination * taxiOnDutyIncrease) * 1.5 + baseCharge * popularLocationMultiplier
+        return baseCharge / 5 * timeToDestination * popularLocationMultiplier
 
         # if the world is gridlocked, a flat fare applies.
 
@@ -312,8 +317,8 @@ class Dispatcher:
                     pass"""
 
             for taxiIdx in self._fareBoard[origin][destination][time].bidders:
-                if len(self._taxis) > taxiIdx:
 
+                if len(self._taxis) > taxiIdx:
                     bidderLoc = self._taxis[taxiIdx].currentLocation
                     bidderNode = self._parent.getNode(bidderLoc[0], bidderLoc[1])
 
