@@ -23,9 +23,10 @@ class TaxiGroupInformation:
     time: int
     fareCount: int
     trafficProbabilityMap: []
+    timeCost: []
 
 
-group = TaxiGroupInformation(0, 0, None, 0, None, None, 0, 0, None)
+group = TaxiGroupInformation(0, 0, [], 0, [], [], 0, 0, [], [])
 
 
 class FareInfo:
@@ -345,10 +346,16 @@ class Taxi:
                     if fare[1].destination[0] == args['destination'][0] and fare[1].destination[1] == \
                             args['destination'][1]:
                         fare[1].allocated = True
-
                         return
+
         # we just dropped off a fare and received payment, add it to the account
         elif msg == self.FARE_PAY:
+            # Works out the actual time cost.
+            # for route in group.timeCost:
+            #     if route["destination"] == args["destination"]:
+            #         route["withTraffic"] = abs(route["startTime"] - self._world.simTime) + route["noTraffic"]
+            #         print(route["withTraffic"])
+
             self._account += args['amount']
             print("The current revenue: £", round(self._account, 2))
             return
@@ -408,7 +415,8 @@ class Taxi:
 
                     # Calculates the estimated heuristic score using Euclidean distance
                     # Problems with this method, nodes can get stuck
-                    childH = (abs(destination[0] - child[0]) ** 2 + abs(destination[1] - child[1]) ** 2) * (1+self._getRoadProb(child))
+                    childH = (abs(destination[0] - child[0]) ** 2 + abs(destination[1] - child[1]) ** 2) * (
+                            1 + self._getRoadProb(child))
 
                     # Current cheapest path.
                     childF = childG + childH
@@ -421,10 +429,6 @@ class Taxi:
 
     #  This function appends values to a probabilistic map.
     def _appendToTrafficProbability(self, x, y):
-        # If probabilisticMap is None create new list.
-        if group.trafficProbabilityMap is None:
-            group.trafficProbabilityMap = []
-
         totalRoadUsers = sum([locI["trafficCount"] for locI in group.trafficProbabilityMap]) + 1
         flag = False
         for loc in group.trafficProbabilityMap:
@@ -442,88 +446,30 @@ class Taxi:
         for loc in group.trafficProbabilityMap:
             loc["probability"] = loc['trafficCount'] / totalRoadUsers
 
-    def _probabilisticPathPlanner(self, currentNode, previousNode):
-        # Work out some costing value for a percentage
-        for cross_section in group.trafficProbabilityMap:
-            pass
-        pass
+    # def _probabilisticPathPlanner(self, currentNode, previousNode):
+    #     # Work out some costing value for a percentage
+    #     for cross_section in group.trafficProbabilityMap:
+    #         pass
+    #     pass
+    #
+    #     # This method uses a Bayesian network of map crossroad probabilities, at every instance of a node travelling in a crossroad the map probabilities update.
+    #
+    #     # This function checks to see if the road already exists in the dictionary.
+    #     def _check_if_road_exists_in_dictionary(self, keys, values):
+    #         return all(
+    #             [all([d[key] == value for key, value in zip(keys, values)]) for d in group.trafficProbabilityMap])
+    #
+    #     # This function gets the map probabilities of a specific road.
+    #     # This will eventually be used in future uses where it can use it as a hash lookup table to find the shortest route using some sort of probability Heuristic
 
-        # This method uses a Bayesian network of map crossroad probabilities, at every instance of a node travelling in a crossroad the map probabilities update.
-
-        # This function checks to see if the road already exists in the dictionary.
-        def _check_if_road_exists_in_dictionary(self, keys, values):
-            return all(
-                [all([d[key] == value for key, value in zip(keys, values)]) for d in group.trafficProbabilityMap])
-
-        # This function gets the map probabilities of a specific road.
-        # This will eventually be used in future uses where it can use it as a hash lookup table to find the shortest route using some sort of probability Heuristic
-
+    # Gets the probability of a node using a dictionary search.
     def _getRoadProb(self, location):
-        if group.trafficProbabilityMap is None:
-            group.trafficProbabilityMap = []
-            return 0
-        elif len(group.trafficProbabilityMap) == 0:
+        if len(group.trafficProbabilityMap) == 0:
             return 0
         for loc in group.trafficProbabilityMap:
             if loc["x"] == location[0] and loc["y"] == location:
                 return loc["probability"]
         return 0
-
-    def _getRoadProbability(self, origin, nextNode):
-        # Gets the sum of all instance of count the total amount of instance in which roads have had taxi's driven on.
-        x = sum([prob["trafficCounter"] for prob in group.trafficProbabilityMap])
-        # This is to prevent any early on bias.
-        if x < 20:
-            return False
-
-        x_y_KeysOfOriginNeighbours = [
-            [origin[0] - 1, origin[1]],
-            [origin[0], origin[1] - 1],
-            [origin[0] - 1, origin[1] - 1],
-            [origin[0] + 1, origin[1]],
-            [origin[0], origin[1] + 1],
-            [origin[0] + 1, origin[1] + 1]
-        ]
-
-        keys = ["x", "y"]
-        distance = self._world.distance2Node(origin, nextNode)
-        # Checks if roads have already been implemented in the world.
-        if self._check_if_road_exists_in_dictionary(keys, [origin[0], origin[1]]):
-            if self._check_if_road_exists_in_dictionary(keys, [nextNode[0], nextNode[1]]):
-                # Gets the dictionary containing these keys if the key and value value is True.
-                nextNodeDictionary = next((d for d in group.trafficProbabilityMap if
-                                           all([d[key] == value for key, value in
-                                                zip(keys, [nextNode[0], nextNode[1]])])), None)
-
-                if nextNodeDictionary is not None:
-                    cost = nextNodeDictionary["probability"] + distance
-
-                origin_dictionary = []
-
-                localProbabilities = []
-                for keySet in x_y_KeysOfOriginNeighbours:
-                    localProbabilities.append(
-                        filter(lambda inst: all(key in inst for key in keySet), group.trafficProbabilityMap))
-                    # Converts the filter back to a list.
-                    localProbabilities = list(localProbabilities)
-                    # Sorts the probability in asc order
-                    localProbabilities = sorted(localProbabilities,
-                                                key=lambda probability: probability["probability"])
-                    lowestNode = None
-                    H = 0
-
-                    for probFilter in localProbabilities:
-                        for prob in probFilter:
-                            pass
-                        # If vacant, the taxi can drive through.
-                        # I need to produce some total heuristic costing system.
-                    # Produce some costing function.
-
-    # For all instance of neighbours paths.
-
-    # This will return the values in the probability table.
-    # Problems that will occur with this solution:
-    # 1. The probability might have not been assigned thus it cannot bare in mind that this route might be the cheapest
 
     def _bidOnFare(self, time, origin, destination, price):
         NoCurrentPassengers = self._passenger is None
@@ -532,7 +478,16 @@ class Taxi:
         TimeToDestination = self._world.travelTime(self._world.getNode(origin[0], origin[1]),
                                                    self._world.getNode(destination[1], destination[1]))
 
-
+        group.timeCost.append({"noTraffic": TimeToDestination + TimeToOrigin,
+                               "origin": origin,
+                               "destination": destination,
+                               "withTraffic": 0,
+                               "startTime": self._world.simTime,
+                               "probability": 0
+                               })
+        for fareTask in group.timeCost:
+            if fareTask["withTraffic"] > 0:
+                print("Time Cost:", (1 / fareTask["withTraffic"] - fareTask["noTraffic"]) / fareTask["probability"])
         # Check for other heuristic costs. and compare them again cost of probability * traffic probability.
         # probability = self._getCrossRoadProbabilty(origin)
 
